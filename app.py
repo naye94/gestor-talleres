@@ -30,6 +30,27 @@ mecanico_controller = MecanicoController()
 vehiculo_controller = VehiculoController()
 cliente_controller = ClienteController()
 
+# ========================================================
+# 🔐 BLINDAJE DE RUTAS GLOBAL (BEFORE REQUEST)
+# ========================================================
+@app.before_request
+def verificar_autenticacion():
+    # Permitimos rutas públicas sin exigir logueo
+    rutas_publicas = ['login', 'login_mecanico', 'static']
+    if request.endpoint in rutas_publicas:
+        return
+
+    # Si se intenta entrar al flujo de mecánicos, validamos su sesión específica
+    if request.endpoint and request.endpoint.startswith('mecanico') or request.endpoint == 'menu_mecanico':
+        if 'mecanico_id' not in session:
+            flash('Debes iniciar sesión como mecánico para acceder.', 'danger')
+            return redirect(url_for('login_mecanico'))
+        return
+
+    # Para cualquier otra ruta del sistema (Administrador), validamos la sesión de Supabase
+    if 'usuario_id' not in session:
+        return redirect(url_for('login'))
+
 # ==========================================
 # RUTAS DE AUTENTICACIÓN (SUPABASE)
 # ==========================================
@@ -52,17 +73,18 @@ def login():
             
     return render_template('login.html')
 
+@app.route('/logout')
+def logout():
+    session.pop('usuario_id', None)
+    flash('Sesión de administrador cerrada correctamente.', 'info')
+    return redirect(url_for('login'))
+
 # ==========================================
 # RUTAS PRINCIPALES Y CRUD TALLERES
 # ==========================================
 
 @app.route('/')
 def index():
-    # 🔐 PUERTA DE SEGURIDAD: Si no hay un usuario guardado en la sesión, lo mandamos al login
-    if 'usuario_id' not in session:
-        return redirect(url_for('login'))
-    
-    # Si el usuario sí inició sesión correctamente, el sistema continúa normal:
     talleres = taller_controller.obtener_todos()
     return render_template('index.html', talleres=talleres)
 
@@ -313,9 +335,6 @@ def logout_mecanico():
 
 @app.route('/menu_mecanico', methods=['GET', 'POST'])
 def menu_mecanico():
-    if 'mecanico_id' not in session or 'id_taller' not in session:
-        flash('Debes iniciar sesión como mecánico.', 'danger')
-        return redirect(url_for('login_mecanico'))
     id_taller = session['id_taller']
     tab = request.args.get('tab', 'servicio')
     nombre_servicio = request.args.get('nombre_servicio', '')
@@ -343,9 +362,6 @@ def menu_mecanico():
 
 @app.route('/mecanico/servicio/crear', methods=['POST'])
 def mecanico_crear_servicio():
-    if 'id_taller' not in session:
-        flash('No autorizado.', 'danger')
-        return redirect(url_for('login_mecanico'))
     from modelo.servicio import Servicio
     nombre = request.form['nombre']
     descripcion = request.form['descripcion']
@@ -360,9 +376,6 @@ def mecanico_crear_servicio():
 
 @app.route('/mecanico/servicio/editar/<int:id_servicio>', methods=['POST'])
 def mecanico_editar_servicio(id_servicio):
-    if 'id_taller' not in session:
-        flash('No authorized.', 'danger')
-        return redirect(url_for('login_mecanico'))
     nombre = request.form['nombre']
     descripcion = request.form['descripcion']
     costo = request.form['costo']
@@ -376,9 +389,6 @@ def mecanico_editar_servicio(id_servicio):
 
 @app.route('/mecanico/servicio/eliminar/<int:id_servicio>', methods=['POST'])
 def mecanico_eliminar_servicio(id_servicio):
-    if 'id_taller' not in session:
-        flash('No autorizado.', 'danger')
-        return redirect(url_for('login_mecanico'))
     try:
         servicio_controller.borrar_servicio(id_servicio)
         flash('Servicio eliminado.', 'success')
@@ -388,9 +398,6 @@ def mecanico_eliminar_servicio(id_servicio):
 
 @app.route('/mecanico/vehiculo/crear', methods=['POST'])
 def mecanico_crear_vehiculo():
-    if 'id_taller' not in session:
-        flash('No autorizado.', 'danger')
-        return redirect(url_for('login_mecanico'))
     from modelo.vehiculo import Vehiculo
     placa = request.form['placa']
     marca = request.form['marca']
@@ -407,9 +414,6 @@ def mecanico_crear_vehiculo():
 
 @app.route('/mecanico/vehiculo/editar/<int:id_vehiculo>', methods=['POST'])
 def mecanico_editar_vehiculo(id_vehiculo):
-    if 'id_taller' not in session:
-        flash('No autorizado.', 'danger')
-        return redirect(url_for('login_mecanico'))
     placa = request.form['placa']
     marca = request.form['marca']
     modelo_v = request.form['modelo']
@@ -425,9 +429,6 @@ def mecanico_editar_vehiculo(id_vehiculo):
 
 @app.route('/mecanico/vehiculo/eliminar/<int:id_vehiculo>', methods=['POST'])
 def mecanico_eliminar_vehiculo(id_vehiculo):
-    if 'id_taller' not in session:
-        flash('No autorizado.', 'danger')
-        return redirect(url_for('login_mecanico'))
     try:
         vehiculo_controller.borrar_vehiculo(id_vehiculo)
         flash('Vehículo eliminado.', 'success')
