@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import sys
 import os
 
@@ -14,8 +15,6 @@ from controlador.vehiculoController import VehiculoController
 from controlador.clienteController import ClienteController
 
 # SOLUCIÓN DE RUTA ABSOLUTA: Forzamos a Flask a buscar exactamente en la carpeta 'vista'
-ruta_vistas = os.path.join(ruta_actual, 'vista')
-# Configuramos Flask para que busque tanto en 'vista' como en 'vista/templates'
 ruta_vistas = os.path.join(ruta_actual, 'vista')
 ruta_templates = os.path.join(ruta_vistas, 'templates')
 
@@ -43,18 +42,16 @@ def login():
         
         auth_response = UsuarioDao.iniciar_sesion(email, password)
         
-        if auth_response and auth_response.user:
-            # Intentamos obtener el id de forma directa o desde un diccionario
-            usuario_id = getattr(auth_response.user, 'id', None) or auth_response.user.get('id')
+        # Validación nativa para objetos de respuesta de Supabase Auth
+        if auth_response and hasattr(auth_response, 'user') and auth_response.user:
+            session['usuario_id'] = auth_response.user.id
+            return redirect(url_for('index'))
             
-            if usuario_id:
-                session['usuario_id'] = usuario_id
-                return redirect(url_for('index'))
-        
-        # If we reach here, authentication failed
+        # Si llega aquí, es porque la autenticación falló en Supabase o los datos no coinciden
         return render_template('login.html', error="Correo o contraseña incorrectos")
             
     return render_template('login.html')
+
 # ==========================================
 # RUTAS PRINCIPALES Y CRUD TALLERES
 # ==========================================
@@ -364,7 +361,7 @@ def mecanico_crear_servicio():
 @app.route('/mecanico/servicio/editar/<int:id_servicio>', methods=['POST'])
 def mecanico_editar_servicio(id_servicio):
     if 'id_taller' not in session:
-        flash('No autorizado.', 'danger')
+        flash('No authorized.', 'danger')
         return redirect(url_for('login_mecanico'))
     nombre = request.form['nombre']
     descripcion = request.form['descripcion']
@@ -475,10 +472,6 @@ def mecanico_eliminar_cliente(id_cliente):
     return redirect(url_for('menu_mecanico', tab='cliente'))
 
 if __name__ == '__main__':
-    import os
-    # 🌐 Render nos asigna un puerto dinámico. Si no existe, usa el 5000 por defecto.
+    # 🌐 Render asigna un puerto dinámico mediante la variable de entorno
     puerto = int(os.environ.get("PORT", 5000))
-    
-    # IMPORTANTE: Desactivamos debug=True para producción en internet
     app.run(host='0.0.0.0', port=puerto, debug=False)
-    
