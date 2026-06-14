@@ -1,98 +1,97 @@
+# -*- coding: utf-8 -*-
 import sys
 import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from modelo.cliente import Cliente
-from config.db import get_connection
+from config.db import supabase
 
 class ClienteDao:
     def __init__(self):
-        self.connection = get_connection()
+        self.supabase = supabase
     
     def crear_cliente(self, cliente):
-        cursor = self.connection.cursor()
-        sql = "INSERT INTO cliente (nombre, apellido, telefono, correo)" \
-        "VALUES (%s, %s, %s, %s)"
-        cursor.execute(sql, (cliente.nombre, cliente.apellido, cliente.telefono, cliente.correo))
-        self.connection.commit()
-        id_cliente = cursor.lastrowid
-        cursor.close()
-        return id_cliente
+        response = self.supabase.table("cliente").insert({
+            "nombre": cliente.nombre,
+            "apellido": cliente.apellido,
+            "telefono": cliente.telefono,
+            "correo": cliente.correo
+        }).execute()
+        
+        if response.data:
+            return response.data[0].get("id_cliente")
+        return None
     
     def obtener_clientes_por_taller(self, id_taller):
-        cursor = self.connection.cursor()
-        sql = '''SELECT DISTINCT c.id_cliente, c.nombre, c.apellido, c.telefono, c.correo
-                FROM cliente c
-                JOIN vehiculo v ON c.id_cliente = v.id_cliente
-                JOIN taller t ON v.id_taller = t.id_taller
-                WHERE t.id_taller = %s;'''
-        cursor.execute(sql, (id_taller,))
-        clientes = cursor.fetchall()
-        cursor.close()
-        return clientes
+        # En Supabase hacemos el equivalente al JOIN consultando la tabla vehículo filtrada por taller
+        response = self.supabase.table("vehiculo") \
+            .select("id_taller, cliente(id_cliente, nombre, apellido, telefono, correo)") \
+            .eq("id_taller", id_taller).execute()
+        
+        clientes_tuplas = set()  # Usamos un conjunto para emular el DISTINCT de SQL
+        if response.data:
+            for item in response.data:
+                c = item.get("cliente")
+                if c:
+                    clientes_tuplas.add((
+                        c.get("id_cliente"),
+                        c.get("nombre"),
+                        c.get("apellido"),
+                        c.get("telefono"),
+                        c.get("correo")
+                    ))
+        return list(clientes_tuplas)
     
     def obtener_cliente(self, id_cliente):
-        cursor = self.connection.cursor()
-        sql = '''SELECT nombre, apellido, telefono, correo FROM cliente WHERE id_cliente = %s'''
-        cursor.execute(sql, (id_cliente,))
-        self.connection.commit()
-        cliente = cursor.fetchone()
-        cursor.close()
-        return cliente
+        response = self.supabase.table("cliente") \
+            .select("nombre, apellido, telefono, correo") \
+            .eq("id_cliente", id_cliente).execute()
+        
+        if response.data:
+            c = response.data[0]
+            return (c.get("nombre"), c.get("apellido"), c.get("telefono"), c.get("correo"))
+        return None
 
     def actualizar_cliente(self, id_cliente, nombre, apellido, telefono, correo):
-        cursor = self.connection.cursor()
-        sql = '''UPDATE cliente SET nombre = %s, apellido = %s, telefono = %s, correo = %s WHERE id_cliente = %s'''
-        cursor.execute(sql, (nombre, apellido, telefono, correo, id_cliente))
-        self.connection.commit()
-        cursor.close()
+        self.supabase.table("cliente").update({
+            "nombre": nombre,
+            "apellido": apellido,
+            "telefono": telefono,
+            "correo": correo
+        }).eq("id_cliente", id_cliente).execute()
 
     def borrar_cliente_taller(self, id_cliente, id_taller):
-        cursor = self.connection.cursor()
         try:
-            # Iniciar transacción explícitamente
-            self.connection.start_transaction()
-
             # 1. Eliminar vehículos del cliente en el taller específico
-            delete_vehiculo_sql = """
-                DELETE FROM vehiculo 
-                WHERE id_cliente = %s 
-                AND id_taller = %s
-            """
-            cursor.execute(delete_vehiculo_sql, (id_cliente, id_taller))
+            self.supabase.table("vehiculo") \
+                .delete() \
+                .eq("id_cliente", id_cliente) \
+                .eq("id_taller", id_taller).execute()
             
-            # 2. Eliminar cliente si ya no tiene vehículos
-            delete_cliente_sql = """
-                DELETE FROM cliente 
-                WHERE id_cliente = %s
-                AND NOT EXISTS (
-                    SELECT 1 
-                    FROM vehiculo 
-                    WHERE id_cliente = %s
-                )
-            """
-            cursor.execute(delete_cliente_sql, (id_cliente, id_cliente))
+            # 2. Verificar si al cliente aún le quedan vehículos en otros talleres
+            check_vehiculos = self.supabase.table("vehiculo") \
+                .select("id_vehiculo") \
+                .eq("id_cliente", id_cliente).execute()
             
-            # Confirmar transacción si todo va bien
-            self.connection.commit()
-            
+            # 3. Si ya no tiene ningún vehículo registrado, se elimina el cliente por completo
+            if not check_vehiculos.data:
+                self.supabase.table("cliente").delete().eq("id_cliente", id_cliente).execute()
+                
         except Exception as e:
-            # Revertir en caso de error
-            self.connection.rollback()
-            raise e  # Relanzar excepción para manejo externo
-        finally:
-            cursor.close()
+            raise e
 
     def obtener_todos(self):
-        cursor = self.connection.cursor()
-        sql = "SELECT id_cliente, nombre, apellido, telefono, correo FROM cliente"
-        cursor.execute(sql)
-        clientes = cursor.fetchall()
-        cursor.close()
-        return clientes
-    def borrar_cliente(self, id_cliente):
-        cursor = self.connection.cursor()
-        sql = "DELETE FROM cliente WHERE id_cliente = %s"
-        cursor.execute(sql, (id_cliente,))
-        self.connection.commit()
-        cursor.close()
+        response = self.supabase.table("cliente") \
+            .select("id_cliente, nombre, apellido, telefono, correo").execute()
+        
+        clientes_tuplas = []
+        if response.data:
+            for c in response.data:
+                clientes_tuplas.append((
+                    c.get("id_cliente"),
+                    c.get("nombre"),
+                    c.get("apellido"),
+                    c.get("telefono"),
+                    c.get("correo")
+                ))
+        return clientes_tuplas
 
+    def borrar_cliente(self, id_cliente):
+        self.supabase.table("cliente").delete().eq("id_cliente", id_cliente).execute()
