@@ -1,39 +1,47 @@
-from config.db import get_connection
-from modelo.mecanico import Mecanico
+# -*- coding: utf-8 -*-
+from config.db import supabase
 
 class MecanicoDao:
     def __init__(self):
-        self.connection2 = get_connection()
+        self.supabase = supabase
     
     def crear_mecanico(self, mecanico):
-        cursor = self.connection2.cursor()
-        sql = '''INSERT INTO mecanico (nombre, apellido, especialidad, telefono, id_taller)
-                VALUES (%s, %s, %s, %s, %s)'''
-        cursor.execute(sql, (mecanico.nombre, mecanico.apellido, mecanico.especialidad, 
-                             mecanico.telefono, mecanico.id_taller))
-        self.connection2.commit()
-        id_mecanico = cursor.lastrowid
-        cursor.close()
-        return id_mecanico
+        response = self.supabase.table("mecanico").insert({
+            "nombre": mecanico.nombre,
+            "apellido": mecanico.apellido,
+            "especialidad": mecanico.especialidad,
+            "telefono": mecanico.telefono,
+            "id_taller": mecanico.id_taller
+        }).execute()
+        
+        if response.data:
+            return response.data[0].get("id_mecanico")
+        return None
     
     def actualizar_mecanico(self, id_mecanico, nombre, apellido, especialidad, telefono):
-        cursor = self.connection2.cursor()
-        sql = '''UPDATE mecanico SET nombre = %s, apellido = %s, especialidad = %s, telefono = %s
-        WHERE id_mecanico = %s'''
-        cursor.execute(sql, (nombre, apellido, especialidad, telefono, id_mecanico))
-        self.connection2.commit()
-        cursor.close()
+        self.supabase.table("mecanico").update({
+            "nombre": nombre,
+            "apellido": apellido,
+            "especialidad": especialidad,
+            "telefono": telefono
+        }).eq("id_mecanico", id_mecanico).execute()
     
     def eliminar_mecanico(self, id_mecanico):
-        cursor = self.connection2.cursor()
-        sql = '''DELETE FROM mecanico WHERE id_mecanico = %s'''
-        cursor.execute(sql, (id_mecanico,))
-        self.connection2.commit()
-        cursor.close()
+        self.supabase.table("mecanico").delete().eq("id_mecanico", id_mecanico).execute()
+
     def obtener_todos(self):
-        cursor = self.connection2.cursor()
-        sql = "SELECT id_mecanico, nombre, apellido, especialidad, telefono, id_taller FROM mecanico"
-        cursor.execute(sql)
-        mecanicos = cursor.fetchall()
-        cursor.close()
-        return mecanicos
+        response = self.supabase.table("mecanico").select("id_mecanico, nombre, apellido, especialidad, telefono, id_taller").execute()
+        
+        # Convertimos a tuplas respetando el orden exacto que utilizaba tu consulta MySQL
+        mecanicos_tuplas = []
+        if response.data:
+            for m in response.data:
+                mecanicos_tuplas.append((
+                    m.get("id_mecanico"),
+                    m.get("nombre"),
+                    m.get("apellido"),
+                    m.get("especialidad"),
+                    m.get("telefono"),
+                    m.get("id_taller")
+                ))
+        return mecanicos_tuplas
