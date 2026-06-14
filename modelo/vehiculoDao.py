@@ -1,34 +1,51 @@
-from config.db import get_connection
+# -*- coding: utf-8 -*-
+from config.db import supabase
 
 class VehiculoDao:
     def __init__(self):
-        self.connection5 = get_connection()
+        self.supabase = supabase
     
     def crear_vehiculo(self, vehiculo):
-        cursor = self.connection5.cursor()
-        sql = '''INSERT INTO vehiculo (placa, marca, modelo, color, id_cliente, id_taller)
-                VALUES (%s, %s, %s, %s, %s, %s)'''
-        cursor.execute(sql, (vehiculo.placa, vehiculo.marca, vehiculo.modelo, vehiculo.color, vehiculo.id_cliente, vehiculo.id_taller))
-        self.connection5.commit()
-        id_vehiculo = cursor.lastrowid
-        return id_vehiculo
+        response = self.supabase.table("vehiculo").insert({
+            "placa": vehiculo.placa,
+            "marca": vehiculo.marca,
+            "modelo": vehiculo.modelo,
+            "color": vehiculo.color,
+            "id_cliente": vehiculo.id_cliente,
+            "id_taller": vehiculo.id_taller
+        }).execute()
+        
+        if response.data:
+            return response.data[0].get("id_vehiculo")
+        return None
         
     def actualizar_vehiculo(self, id_vehiculo, placa, marca, modelo, color, id_cliente, id_taller):
-        cursor = self.connection5.cursor()
-        sql = '''UPDATE vehiculo SET placa = %s, marca = %s, modelo = %s, color = %s, id_cliente = %s, id_taller = %s
-                WHERE id_vehiculo = %s'''
-        cursor.execute(sql, (placa, marca, modelo, color, id_cliente, id_taller, id_vehiculo))
-        self.connection5.commit()
-        cursor.close()
+        self.supabase.table("vehiculo").update({
+            "placa": placa,
+            "marca": marca,
+            "modelo": modelo,
+            "color": color,
+            "id_cliente": id_cliente,
+            "id_taller": id_taller
+        }).eq("id_vehiculo", id_vehiculo).execute()
+        
     def borrar_vehiculo(self, id_vehiculo):
-        cursor = self.connection5.cursor()
-        sql = '''DELETE FROM vehiculo WHERE id_vehiculo = %s'''
-        cursor.execute(sql, (id_vehiculo,))
-        self.connection5.commit()
+        self.supabase.table("vehiculo").delete().eq("id_vehiculo", id_vehiculo).execute()
+
     def obtener_todos(self):
-        cursor = self.connection5.cursor()
-        sql = "SELECT id_vehiculo, placa, marca, modelo, color, id_cliente, id_taller FROM vehiculo"
-        cursor.execute(sql)
-        vehiculos = cursor.fetchall()
-        cursor.close()
-        return vehiculos
+        response = self.supabase.table("vehiculo").select("id_vehiculo, placa, marca, modelo, color, id_cliente, id_taller").execute()
+        
+        # Mapeamos los diccionarios a tuplas con el orden exacto de tu antiguo cursor
+        vehiculos_tuplas = []
+        if response.data:
+            for v in response.data:
+                vehiculos_tuplas.append((
+                    v.get("id_vehiculo"),
+                    v.get("placa"),
+                    v.get("marca"),
+                    v.get("modelo"),
+                    v.get("color"),
+                    v.get("id_cliente"),
+                    v.get("id_taller")
+                ))
+        return vehiculos_tuplas
