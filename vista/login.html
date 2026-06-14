@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Login - Gestor de Talleres</title>
+</head>
+<body>
+    <div style="text-align: center; margin-top: 100px;">
+        <h2>Gestor de Talleres - Iniciar Sesión</h2>
+        
+        {% if error %}
+            <p style="color: red;">{{ error }}</p>
+        {% endif %}
+
+        <form action="/login" method="POST">
+            <input type="email" name="txtEmail" placeholder="Correo electrónico" required><br><br>
+            <input type="password" name="txtPassword" placeholder="Contraseña" required><br><br>
+            <button type="submit">Ingresar al Sistema</button>
+        </form>
+    </div>
+</body>
+</html>
