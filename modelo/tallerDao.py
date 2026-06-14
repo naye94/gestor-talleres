@@ -1,35 +1,43 @@
-from config.db import get_connection
-from modelo.taller import Taller
+# -*- coding: utf-8 -*-
+from config.db import supabase
 
 class TallerDao:
     def __init__(self):
-        self.connection4 = get_connection()
+        self.supabase = supabase
 
     def crear_taller(self, taller):
-        cursor = self.connection4.cursor()
-        sql = '''INSERT INTO taller (nombre, direccion, telefono) VALUES (%s, %s, %s)'''
-        cursor.execute(sql, (taller.nombre, taller.direccion, taller.telefono))
-        self.connection4.commit()
-        id_taller = cursor.lastrowid
-        return id_taller
+        # Insertamos los datos y solicitamos que devuelva la fila creada para capturar el ID
+        response = self.supabase.table("taller").insert({
+            "nombre": taller.nombre,
+            "direccion": taller.direccion,
+            "telefono": taller.telefono
+        }).execute()
+        
+        if response.data:
+            return response.data[0].get("id_taller")
+        return None
     
     def actualizar_taller(self, id_taller, nombre, direccion, telefono):
-        cursor = self.connection4.cursor()
-        sql = '''UPDATE taller SET nombre = %s, direccion = %s, telefono = %s 
-                WHERE id_taller = %s'''
-        cursor.execute(sql, (nombre, direccion, telefono, id_taller))
-        self.connection4.commit()
+        self.supabase.table("taller").update({
+            "nombre": nombre,
+            "direccion": direccion,
+            "telefono": telefono
+        }).eq("id_taller", id_taller).execute()
     
     def borrar_taller(self, id_taller):
-        cursor = self.connection4.cursor()
-        sql = '''DELETE FROM taller WHERE id_taller = %s'''
-        cursor.execute(sql, (id_taller,))
-        self.connection4.commit()
+        self.supabase.table("taller").delete().eq("id_taller", id_taller).execute()
     
     def obtener_todos(self):
-        cursor = self.connection4.cursor()
-        sql = "SELECT id_taller, nombre, direccion, telefono FROM taller"
-        cursor.execute(sql)
-        talleres = cursor.fetchall()
-        cursor.close()
-        return talleres
+        response = self.supabase.table("taller").select("id_taller, nombre, direccion, telefono").execute()
+        
+        # Convertimos la lista de diccionarios JSON en una lista de tuplas para mantener la estructura original
+        talleres_tuplas = []
+        if response.data:
+            for t in response.data:
+                talleres_tuplas.append((
+                    t.get("id_taller"),
+                    t.get("nombre"),
+                    t.get("direccion"),
+                    t.get("telefono")
+                ))
+        return talleres_tuplas
