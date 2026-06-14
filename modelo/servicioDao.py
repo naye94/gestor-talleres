@@ -1,37 +1,49 @@
-from config.db import get_connection
-from modelo.servicio import Servicio
+# -*- coding: utf-8 -*-
+from config.db import supabase
 
 class ServicioDao:
     def __init__(self):
-        self.connection3 = get_connection()
+        self.supabase = supabase
 
     def crear_servicio(self, servicio):
-        cursor = self.connection3.cursor()
-        sql = '''INSERT INTO servicio (nombre, descripcion, costo, id_taller)
-                VALUES (%s, %s, %s, %s)'''
-        cursor.execute(sql, (servicio.nombre, servicio.descripcion, servicio.costo, servicio.id_taller))
-        self.connection3.commit()
-        id_servicio = cursor.lastrowid
-        return id_servicio
+        response = self.supabase.table("servicio").insert({
+            "nombre": servicio.nombre,
+            "descripcion": servicio.descripcion,
+            "costo": servicio.costo,
+            "id_taller": servicio.id_taller
+        }).execute()
+        
+        if response.data:
+            return response.data[0].get("id_servicio")
+        return None
     
-    def actualizar_servicio(self, id_servicio, nombre, descripcion, costo):
-        cursor = self.connection3.cursor()
-        sql = '''UPDATE servicio SET nombre = %s, descripcion = %s, costo = %s
-                WHERE id_servicio = %s'''
-        cursor.execute(sql, (nombre, descripcion, costo, id_servicio))
-        self.connection3.commit()
-        cursor.close()
+    def actualizar_servicio(self, id_servicio, nombre, descripcion, costo, id_taller=None):
+        datos_actualizar = {
+            "nombre": nombre,
+            "descripcion": descripcion,
+            "costo": costo
+        }
+        # Si el controlador envía el id_taller, lo actualizamos también
+        if id_taller is not None:
+            datos_actualizar["id_taller"] = id_taller
 
+        self.supabase.table("servicio").update(datos_actualizar).eq("id_servicio", id_servicio).execute()
+    
     def borrar_servicio(self, id_servicio):
-        cursor = self.connection3.cursor()
-        sql = '''DELETE FROM servicio WHERE id_servicio = %s'''
-        cursor.execute(sql, (id_servicio,))
-        self.connection3.commit()
-        cursor.close()
+        self.supabase.table("servicio").delete().eq("id_servicio", id_servicio).execute()
+
     def obtener_todos(self):
-        cursor = self.connection3.cursor()
-        sql = "SELECT id_servicio, nombre, descripcion, costo, id_taller FROM servicio"
-        cursor.execute(sql)
-        servicios = cursor.fetchall()
-        cursor.close()
-        return servicios 
+        response = self.supabase.table("servicio").select("id_servicio, nombre, descripcion, costo, id_taller").execute()
+        
+        # Convertimos los diccionarios a tuplas con el orden exacto de tu antiguo mapeo MySQL
+        servicios_tuplas = []
+        if response.data:
+            for s in response.data:
+                servicios_tuplas.append((
+                    s.get("id_servicio"),
+                    s.get("nombre"),
+                    s.get("descripcion"),
+                    s.get("costo"),
+                    s.get("id_taller")
+                ))
+        return servicios_tuplas
